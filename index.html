@@ -395,6 +395,7 @@ async function load(){
   leads.forEach(l=>{
     if(l.paused===undefined){l.paused=false;l.pausedDate=null;}
     if(l.quoteSent===undefined){l.quoteSent=false;l.quoteSentDate=null;}
+    if(l.scheduledFollowup===undefined)l.scheduledFollowup=null;
     if(l.calls&&l.calls.weekly&&l.calls.weekly.length<3){
       const w2m=l.calls.weekly[1]?l.calls.weekly[1].dueStart:l.calls.weekly[0].dueStart;
       const w3m=addD(w2m,7),w3f=addD(w3m,4);
@@ -507,6 +508,7 @@ function quoteSold(qid){
   tab='sales';showSaleForm=true;render();
 }
 function quoteLost(qid){const q=quotes.find(x=>x.id===qid);q.status='lost';if(q.leadId)leads=leads.filter(l=>l.id!==q.leadId);save();render();}
+function reopenQuote(qid){const q=quotes.find(x=>x.id===qid);q.status='active';q.paused=false;q.pausedDate=null;save();render();}
 function deleteQuote(qid){quotes=quotes.filter(x=>x.id!==qid);save();render();}
 function updateQuoteNotes(qid,v){quotes.find(x=>x.id===qid).notes=v;save();}
 function toggleQuotePause(qid){const q=quotes.find(x=>x.id===qid);if(q.paused){q.paused=false;q.pausedDate=null;}else{q.paused=true;q.pausedDate=todayISO();}save();render();}
@@ -560,7 +562,12 @@ function getMonthLabel(ym){const[y,m]=ym.split('-').map(Number);return['Jan','Fe
 // ── TODAY ITEMS ──
 function getTodayItems(){
   const t=todayISO();if(isOffDay(t))return[];const items=[];
-  leads.forEach(l=>{if(l.paused)return;
+  leads.forEach(l=>{
+    // Scheduled follow-up shows even when paused
+    if(l.scheduledFollowup&&l.scheduledFollowup.status==='pending'&&l.scheduledFollowup.date<=t){
+      items.push({src:'lead',type:'l_scheduled',ref:l,label:'Scheduled F/U'+(l.scheduledFollowup.time?' @ '+l.scheduledFollowup.time:''),due:l.scheduledFollowup.date,eDue:l.scheduledFollowup.date,ch:'call'});
+    }
+    if(l.paused)return;
     l.calls.daily.forEach((c,i)=>{if(c.status==='pending'){const e=pushWD(c.due);if(e<=t)items.push({src:'lead',type:'daily_call',ref:l,idx:i,label:c.label,due:c.due,eDue:e,ch:'call'});}});
     l.calls.weekly.forEach((w,i)=>{if(w.status==='pending'&&w.dueStart<=t)items.push({src:'lead',type:'weekly_call',ref:l,idx:i,label:w.label,due:w.dueStart,eDue:w.dueStart,ch:'call'});});
     l.emails.forEach((em,i)=>{if(em.status==='pending'){const e=pushWD(em.due);if(e<=t)items.push({src:'lead',type:'email',ref:l,idx:i,label:em.label,due:em.due,eDue:e,ch:'email'});}});
@@ -612,7 +619,7 @@ function renderOffBar(){const t=todayISO(),tmr=tomorrowISO(),tmrOff=offDays.incl
 function renderToday(items){
   const t=todayISO();let h=renderOffBar();
   if(isOffDay(t)&&dayOfWeek(t)!==0&&dayOfWeek(t)!==6){h+=`<div class="off-banner"><div class="off-banner-text">You're off today</div><button class="abtn done" onclick="removeOffDay('${t}')">I'm in after all</button></div>`;return h;}
-  const pcL=leads.filter(l=>l.paused).length;
+  const pcL=leads.filter(l=>l.paused&&!(l.scheduledFollowup&&l.scheduledFollowup.status==='pending')).length;
   const pcQ=quotes.filter(q=>q.status==='active'&&q.paused&&!(q.scheduledFollowup&&q.scheduledFollowup.status==='pending')).length;
   if(pcL||pcQ){
     let msg=[];
@@ -641,12 +648,15 @@ function renderTI(it,t){
   else if(it.type==='q_scheduled'){
     act=`<div class="action-btns"><button class="abtn done" onclick="markFollowupDone('${it.ref.id}')">Done</button></div>`;
   }
+  else if(it.type==='l_scheduled'){
+    act=`<div class="action-btns"><button class="abtn done" onclick="markLeadFollowupDone('${it.ref.id}')">Done</button></div>`;
+  }
   let meta=it.label;
   if(it.type==='weekly_call')meta+=' · Call + Text';
   if(it.type==='followup')meta='60-90 Day Check-in';
   const isQ=it.src==='quote';
   const chipCls=isQ?'quote-chip':it.ch;
-  const chipLbl=isQ?'Quote F/U':it.ch.charAt(0).toUpperCase()+it.ch.slice(1);
+  const chipLbl=isQ?'Quote F/U':(it.type==='l_scheduled'?'Lead F/U':it.ch.charAt(0).toUpperCase()+it.ch.slice(1));
   // Contact info with copy buttons
   const phone=it.ref.phone,email=it.ref.email;
   let contactHtml='';
@@ -667,7 +677,7 @@ function renderLeads(){
   // Filter bar
   h+=`<div class="filter-bar"><input type="text" class="filter-search" placeholder="Search by name, phone, email…" value="${esc(leadSearch)}" oninput="onLeadSearch(this.value)"><select class="filter-sort" onchange="setLeadSort(this.value)"><option value="newest"${leadSort==='newest'?' selected':''}>Newest</option><option value="oldest"${leadSort==='oldest'?' selected':''}>Oldest</option><option value="az"${leadSort==='az'?' selected':''}>Name A–Z</option><option value="za"${leadSort==='za'?' selected':''}>Name Z–A</option></select></div>`;
   const active=sortItems(leads.filter(l=>!l.paused),leadSort,'dateAdded');
-  const paused=sortItems(leads.filter(l=>l.paused),leadSort,'dateAdded');
+  const paused=sortItems(leads.filter(l=>l.paused&&!(l.scheduledFollowup&&l.scheduledFollowup.status==='pending')),leadSort,'dateAdded');
   h+=`<div class="two-col-layout"><div class="col-active"><div class="section-label">Active</div>`;
   h+=active.length?active.map(renderLC).join(''):'<div class="col-empty">No active leads</div>';
   h+=`</div><div class="col-paused"><div class="section-label">Paused</div>`;
@@ -684,7 +694,8 @@ function renderLC(l){
   {let cls='dot';if(l.followupText.status==='done')cls+=' done';else if(l.followupText.due<=t&&!l.paused)cls+=' active';dots+=`<span class="${cls}"></span>`;}
   let sub=[l.phone,l.email,l.source].filter(Boolean);
   let badges='';
-  if(l.paused)badges+=`<span class="chip paused">⏸ Paused</span>`;
+  if(l.paused&&!(l.scheduledFollowup&&l.scheduledFollowup.status==='pending'))badges+=`<span class="chip paused">⏸ Paused</span>`;
+  if(l.scheduledFollowup&&l.scheduledFollowup.status==='pending')badges+=`<span class="chip" style="background:rgba(74,106,138,.22);color:var(--accent-dim);">F/U ${fmtShort(l.scheduledFollowup.date)}${l.scheduledFollowup.time?' @ '+l.scheduledFollowup.time:''}</span>`;
   if(l.quoteSent)badges+=`<span class="chip quote-chip">Quote Sent</span>`;
   let det='';
   if(open){
@@ -698,6 +709,23 @@ function renderLC(l){
     det+=`<div><label style="${fldLabel}">Source</label><select onchange="updateLeadField('${l.id}','source',this.value,this)" style="${fldInp}"><option value="">—</option><option ${l.source==='Referral'?'selected':''}>Referral</option><option ${l.source==='Facebook'?'selected':''}>Facebook</option><option ${l.source==='Website'?'selected':''}>Website</option><option ${l.source==='Walk-in / Sign'?'selected':''}>Walk-in / Sign</option><option ${l.source==='Repeat Client'?'selected':''}>Repeat Client</option><option ${l.source==='Other'?'selected':''}>Other</option></select></div>`;
     det+=`</div>`;
     det+=`<div class="lead-controls"><button class="pause-btn ${l.paused?'active':''}" onclick="togglePause('${l.id}')">${l.paused?'⏸ Resume':'⏸ Pause'}</button>${l.paused?`<span class="pause-info">Paused ${l.pausedDate?fmtShort(l.pausedDate):''}</span>`:''}</div>`;
+    // ── SCHEDULED FOLLOW-UP ──
+    det+=`<div style="background:rgba(74,106,138,.08);border:1.5px solid rgba(74,106,138,.25);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;">`;
+    det+=`<div style="font-family:'Oswald',sans-serif;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--accent-dim);margin-bottom:8px;">Scheduled Follow-Up</div>`;
+    if(l.scheduledFollowup){
+      const fu=l.scheduledFollowup;
+      if(fu.status==='done'){
+        det+=`<div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ok);">✓ Completed — was ${fmtDay(fu.date)}${fu.time?' @ '+fu.time:''}</div>`;
+        det+=`<button class="abtn miss" style="margin-top:6px;font-size:9px;" onclick="clearLeadFollowup('${l.id}')">Clear</button>`;
+      } else {
+        det+=`<div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text);">${fmtDay(fu.date)}${fu.time?' @ '+fu.time:''}</div>`;
+        det+=`<div style="margin-top:6px;display:flex;gap:6px;"><button class="abtn done" onclick="markLeadFollowupDone('${l.id}')">Done</button><button class="abtn miss" style="font-size:9px;" onclick="clearLeadFollowup('${l.id}')">Remove</button></div>`;
+      }
+    } else {
+      det+=`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;"><input type="date" id="lfu_date_${l.id}" min="${t}" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:'JetBrains Mono',monospace;font-size:11px;border-radius:var(--radius-sm);"><input type="time" id="lfu_time_${l.id}" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:'JetBrains Mono',monospace;font-size:11px;border-radius:var(--radius-sm);width:100px;"><button class="abtn done" onclick="setLeadScheduledFollowup('${l.id}')">Set</button></div>`;
+      det+=`<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--text-muted);margin-top:6px;">Set a date if the customer isn't ready yet — auto-pauses the cadence and moves to Follow-Up</div>`;
+    }
+    det+=`</div>`;
     // Calls
     det+=`<div class="channel-section"><div class="ch-title"><span class="chip call">Call</span>Phone Calls — tap to cycle</div><div class="ladder">`;
     l.calls.daily.forEach((c,i)=>{let tc='tick',ic='',st='';if(c.status==='answered'){tc+=' done';ic='✓';st='<div class="tick-status s-ans">Ans</div>';}else if(c.status==='missed'){tc+=' missed-dot';ic='✗';st='<div class="tick-status s-miss">Miss+Txt</div>';}else if(c.due<t)tc+=' overdue';else if(c.due===t)tc+=' today-dot';det+=`<div class="rung"><div class="${tc}" onclick="cycleDC('${l.id}',${i})">${ic}</div><div class="tick-label">${c.label}</div><div class="tick-date">${fmtShort(c.due)}</div>${st}</div>`;});
@@ -813,6 +841,8 @@ function renderQC(q){
     det+=`<div class="notes-box"><textarea placeholder="Notes…" onchange="updateQuoteNotes('${q.id}',this.value)">${esc(q.notes)}</textarea></div>`;
     if(isActive){
       det+=`<div class="lead-actions"><button class="sold-btn" onclick="quoteSold('${q.id}')">✓ Won — Log Sale</button><button class="del-link" style="color:var(--amber);" onclick="quoteLost('${q.id}')">Lost</button><button class="del-link" onclick="deleteQuote('${q.id}')">Remove</button></div>`;
+    } else if(q.status==='lost'){
+      det+=`<div class="lead-actions"><button class="sold-btn" style="border-color:var(--gold);color:var(--gold);" onclick="reopenQuote('${q.id}')">↺ Reopen</button><button class="del-link" onclick="deleteQuote('${q.id}')">Remove</button></div>`;
     } else {
       det+=`<div class="lead-actions"><button class="del-link" onclick="deleteQuote('${q.id}')">Remove</button></div>`;
     }
@@ -846,6 +876,7 @@ function importData(){const ta=document.getElementById('importArea'),st=document
   try{const data=JSON.parse(ta.value.trim());if(!data.leads||!Array.isArray(data.leads))throw new Error('bad');data.leads.forEach(l=>{
     if(l.paused===undefined){l.paused=false;l.pausedDate=null;}
     if(l.quoteSent===undefined){l.quoteSent=false;l.quoteSentDate=null;}
+    if(l.scheduledFollowup===undefined)l.scheduledFollowup=null;
     if(l.calls&&l.calls.weekly&&l.calls.weekly.length<3){
       const w2m=l.calls.weekly[1]?l.calls.weekly[1].dueStart:l.calls.weekly[0].dueStart;
       const w3m=addD(w2m,7),w3f=addD(w3m,4);
@@ -886,6 +917,9 @@ function matchesSearch(item,q){
   return hay.includes(q.toLowerCase());
 }
 function isLeadInFollowUp(l){
+  // Case A: has a pending scheduled follow-up (auto-paused)
+  if(l.scheduledFollowup&&l.scheduledFollowup.status==='pending')return true;
+  // Case B: end-of-cadence 60-90 Day check
   if(l.paused)return false;
   if(!l.followupText||l.followupText.status!=='pending')return false;
   if(l.calls.daily.some(c=>c.status==='pending'))return false;
@@ -930,6 +964,28 @@ function updateLeadField(lid,field,v,el){
     }
   }
 }
+function setLeadScheduledFollowup(lid){
+  const dateEl=document.getElementById('lfu_date_'+lid);
+  const timeEl=document.getElementById('lfu_time_'+lid);
+  if(!dateEl||!dateEl.value)return;
+  const l=leads.find(x=>x.id===lid);
+  l.scheduledFollowup={date:dateEl.value,time:timeEl?timeEl.value:'',status:'pending'};
+  if(!l.paused){l.paused=true;l.pausedDate=todayISO();}
+  save();render();
+}
+function clearLeadFollowup(lid){
+  const l=leads.find(x=>x.id===lid);
+  l.scheduledFollowup=null;
+  if(l.paused){l.paused=false;l.pausedDate=null;}
+  save();render();
+}
+function markLeadFollowupDone(lid){
+  const l=leads.find(x=>x.id===lid);
+  if(l.scheduledFollowup)l.scheduledFollowup.status='done';
+  if(l.paused){l.paused=false;l.pausedDate=null;}
+  save();render();
+}
+
 function setLeadSort(v){leadSort=v;render();}
 function setQuoteSort(v){quoteSort=v;render();}
 function setClosedSort(v){closedSort=v;render();}
