@@ -1,0 +1,183 @@
+═══════════════════════════════════════════
+LEAD DASHBOARD — UPDATE & GITHUB GUIDE
+═══════════════════════════════════════════
+
+
+YOUR SETUP
+──────────
+• Dashboard URL: yourusername.github.io/lead-dashboard/
+• GitHub repo: github.com/yourusername/lead-dashboard
+• Where your data lives: Safari's localStorage on your MacBook
+• File that runs the app: index.html
+
+
+═══════════════════════════════════════════
+PART 1 — GETTING A NEW UPDATE LIVE
+═══════════════════════════════════════════
+
+Do this whenever Claude sends you an updated file.
+
+
+STEP 1: Download the new file
+─────────────────────────────
+1. In Claude's chat, click the artifact card at the
+   end of the update.
+2. Click the download button — it saves as
+   "outreach-tracker.html" in your Downloads folder.
+
+
+STEP 2: Rename to "index.html"
+──────────────────────────────
+1. Open Finder, go to Downloads.
+2. Click the file once (don't double-click).
+3. Press Return to rename.
+4. Change it to exactly:  index.html
+5. Press Return again.
+6. If Mac warns about the extension, click "Use .html".
+
+
+STEP 3: Upload to GitHub
+────────────────────────
+1. Open Safari, go to github.com, sign in.
+2. Click your profile picture (top right) →
+   "Your repositories".
+3. Click "lead-dashboard".
+4. Click "Add file" (button near the top right) →
+   "Upload files".
+5. Drag your index.html from Downloads into the box.
+6. It'll say something like "Replace existing file" —
+   that's correct.
+7. Scroll down, click the green "Commit changes"
+   button.
+
+
+STEP 4: See your update
+───────────────────────
+1. Wait 60 seconds (GitHub Pages needs a minute).
+2. Open your dashboard URL in Safari.
+3. Press Cmd + Shift + R to force-refresh.
+4. Your update is live.
+
+>>> Your leads and data don't move — they stay in
+    Safari's storage on your Mac. Only the code
+    changes.
+
+
+═══════════════════════════════════════════
+PART 2 — BACKING UP YOUR DATA
+═══════════════════════════════════════════
+
+Do this once a month, or before any risky change
+(clearing Safari cache, updating macOS, switching
+browsers).
+
+1. Open your dashboard.
+2. Click the "Data" tab.
+3. Click "Download Backup".
+4. Save the JSON file to iCloud Drive or Dropbox.
+5. Name it with the date:
+   leads-backup-2026-09-28.json
+
+
+═══════════════════════════════════════════
+PART 3 — RESTORING FROM BACKUP
+═══════════════════════════════════════════
+
+If you ever lose your data (cleared cache, new Mac,
+browser reset):
+
+1. Open your dashboard URL.
+2. Open the backup JSON file — copy all the text
+   inside.
+3. Go to the "Data" tab.
+4. Paste the JSON into the Import box.
+5. Click "Confirm Import".
+6. Everything comes back.
+
+
+═══════════════════════════════════════════
+PART 4 — COMMON ISSUES
+═══════════════════════════════════════════
+
+"Nothing changed after I updated"
+─────────────────────────────────
+• Force refresh: Cmd + Shift + R
+• Still nothing? Wait 2-3 more minutes. GitHub Pages
+  can be slow sometimes.
+
+
+"My data is gone!"
+──────────────────
+• Cleared Safari cache? Or opened in a different
+  browser?
+• Data tab → paste your most recent backup JSON →
+  Confirm Import.
+
+
+"I got a 'outreach-tracker (2).html' file"
+──────────────────────────────────────────
+• Delete the old file from Downloads first, then
+  re-download so it saves cleanly with the right
+  name.
+
+
+"I want to see if my dashboard works on my iPad"
+────────────────────────────────────────────────
+• Just open the URL in Safari on iPad.
+• Note: iPad has its own localStorage separate from
+  the Mac, so it'll start empty. Use export/import
+  to move data if you want it there too.
+
+
+═══════════════════════════════════════════
+PART 5 — HANDY SAFARI SETUP
+═══════════════════════════════════════════
+
+Pin the tab
+───────────
+Right-click your dashboard tab → "Pin Tab". It stays
+permanently in your tab bar.
+
+
+Bookmark the GitHub repo
+────────────────────────
+Also bookmark:
+   github.com/yourusername/lead-dashboard
+
+So uploading a new file is one click away.
+
+
+Add to Dock (optional)
+──────────────────────
+In Safari, File → "Add to Dock" while on your
+dashboard. It appears in your Dock like an app.
+
+
+═══════════════════════════════════════════
+PART 6 — ASKING CLAUDE FOR UPDATES
+═══════════════════════════════════════════
+
+When you want a new feature or fix:
+
+1. Start a new Claude chat (or continue in an
+   existing one).
+2. Describe what you want in plain English:
+   • "Can you add a checkbox for X on the leads tab?"
+   • "There's a bug where Y happens when I do Z"
+   • "I want a new tab for [thing]"
+3. Claude sends you an updated HTML file.
+4. Run through Part 1 above to get it live.
+
+
+═══════════════════════════════════════════
+QUICK REFERENCE — 30-SECOND UPDATE
+═══════════════════════════════════════════
+
+1. Download file from Claude
+2. Rename to  index.html
+3. GitHub repo → Add file → Upload → Drag → Commit
+4. Wait 60s → open dashboard → Cmd+Shift+R
+5. Done
+
+
+═══════════════════════════════════════════
