@@ -374,7 +374,15 @@ const Q_STEPS=[
 ];
 function buildQuoteCadence(sentDate){
   const s=pushWD(sentDate);
-  return Q_STEPS.map(st=>({label:st.label,type:st.type,due:pushWD(addD(s,st.dayOff)),status:'pending'}));
+  const result=[];
+  let lastDue=null;
+  Q_STEPS.forEach(st=>{
+    let due=pushWD(addD(s,st.dayOff));
+    if(lastDue&&due<=lastDue)due=nextWD(lastDue);
+    result.push({label:st.label,type:st.type,due:due,status:'pending'});
+    lastDue=due;
+  });
+  return result;
 }
 function newQuote(name,phone,email,source,deckType,amount,sentDate,notes,leadId){
   const sd=sentDate||todayISO();
@@ -423,9 +431,20 @@ async function load(){
     if(q.steps){
       const oldSteps=q.steps;
       const s=pushWD(q.dateSent);
+      let lastDue=null;
       q.steps=Q_STEPS.map(st=>{
         const oldMatch=oldSteps.find(o=>o.label===st.label);
-        return {label:st.label,type:st.type,due:pushWD(addD(s,st.dayOff)),status:oldMatch?oldMatch.status:'pending'};
+        const status=oldMatch?oldMatch.status:'pending';
+        let due;
+        if(oldMatch&&status!=='pending'){
+          due=oldMatch.due;
+          lastDue=due;
+        } else {
+          due=pushWD(addD(s,st.dayOff));
+          if(lastDue&&due<=lastDue)due=nextWD(lastDue);
+          lastDue=due;
+        }
+        return {label:st.label,type:st.type,due:due,status:status};
       });
     }
   });
@@ -464,7 +483,21 @@ function recalc(){
     [0,2,6,13,20,27].forEach((off,i)=>{if(l.emails[i]&&l.emails[i].status==='pending')l.emails[i].due=pushWD(addD(s,off));});
     if(l.followupText.status==='pending'){const lw=l.calls.weekly[l.calls.weekly.length-1];l.followupText.due=pushWD(addD(lw.dueEnd,75));}
   });
-  quotes.forEach(q=>{if(q.status==='active'){const s=pushWD(q.dateSent);Q_STEPS.forEach((st,i)=>{if(q.steps[i]&&q.steps[i].status==='pending')q.steps[i].due=pushWD(addD(s,st.dayOff));});}});
+  quotes.forEach(q=>{if(q.status==='active'){
+    const s=pushWD(q.dateSent);
+    let lastDue=null;
+    Q_STEPS.forEach((st,i)=>{
+      if(!q.steps[i])return;
+      if(q.steps[i].status==='pending'){
+        let newDue=pushWD(addD(s,st.dayOff));
+        if(lastDue&&newDue<=lastDue)newDue=nextWD(lastDue);
+        q.steps[i].due=newDue;
+        lastDue=newDue;
+      } else {
+        lastDue=q.steps[i].due;
+      }
+    });
+  }});
 }
 
 // ── LEAD ACTIONS ──
@@ -525,7 +558,18 @@ function updateQuoteSentDate(qid,newDate){
   const q=quotes.find(x=>x.id===qid);
   q.dateSent=newDate;
   const s=pushWD(newDate);
-  Q_STEPS.forEach((st,i)=>{if(q.steps[i].status==='pending')q.steps[i].due=pushWD(addD(s,st.dayOff));});
+  let lastDue=null;
+  Q_STEPS.forEach((st,i)=>{
+    if(!q.steps[i])return;
+    if(q.steps[i].status==='pending'){
+      let newDue=pushWD(addD(s,st.dayOff));
+      if(lastDue&&newDue<=lastDue)newDue=nextWD(lastDue);
+      q.steps[i].due=newDue;
+      lastDue=newDue;
+    } else {
+      lastDue=q.steps[i].due;
+    }
+  });
   save();render();
 }
 function updateQuoteField(qid,field,v){const q=quotes.find(x=>x.id===qid);q[field]=field==='amount'?parseFloat(v)||0:v;save();render();}
@@ -541,7 +585,29 @@ function setScheduledFollowup(qid){
   save();render();
 }
 function clearFollowup(qid){const q=quotes.find(x=>x.id===qid);q.scheduledFollowup=null;if(q.paused){q.paused=false;q.pausedDate=null;}save();render();}
-function markFollowupDone(qid){const q=quotes.find(x=>x.id===qid);if(q.scheduledFollowup)q.scheduledFollowup.status='done';if(q.paused){q.paused=false;q.pausedDate=null;}save();render();}
+function markFollowupDone(qid){
+  const q=quotes.find(x=>x.id===qid);
+  if(q.scheduledFollowup)q.scheduledFollowup.status='done';
+  if(q.paused){q.paused=false;q.pausedDate=null;}
+  // Shift pending steps so the earliest overdue one lands today
+  const today=todayISO();
+  const firstPending=q.steps.find(s=>s.status==='pending');
+  if(firstPending){
+    const diff=Math.round((new Date(today)-new Date(firstPending.due))/(1000*60*60*24));
+    if(diff>0){
+      let lastDue=null;
+      q.steps.forEach(s=>{
+        if(s.status==='pending'){
+          let newDue=pushWD(addD(s.due,diff));
+          if(lastDue&&newDue<=lastDue)newDue=nextWD(lastDue);
+          s.due=newDue;
+          lastDue=newDue;
+        }
+      });
+    }
+  }
+  save();render();
+}
 
 // ── SALE ACTIONS ──
 function markAsSold(lid){const l=leads.find(x=>x.id===lid);saleFormPrefill={name:l.name,phone:l.phone,email:l.email,source:l.source,leadId:l.id};tab='sales';showSaleForm=true;render();}
@@ -983,6 +1049,38 @@ function markLeadFollowupDone(lid){
   const l=leads.find(x=>x.id===lid);
   if(l.scheduledFollowup)l.scheduledFollowup.status='done';
   if(l.paused){l.paused=false;l.pausedDate=null;}
+  // Collect earliest pending due date across the lead's cadence
+  const today=todayISO();
+  const pDues=[];
+  l.calls.daily.forEach(c=>{if(c.status==='pending')pDues.push(c.due);});
+  l.calls.weekly.forEach(w=>{if(w.status==='pending')pDues.push(w.dueStart);});
+  l.emails.forEach(e=>{if(e.status==='pending')pDues.push(e.due);});
+  if(l.followupText&&l.followupText.status==='pending')pDues.push(l.followupText.due);
+  if(pDues.length){
+    pDues.sort();
+    const diff=Math.round((new Date(today)-new Date(pDues[0]))/(1000*60*60*24));
+    if(diff>0){
+      // Daily calls: keep them as consecutive weekdays
+      const firstDailyIdx=l.calls.daily.findIndex(c=>c.status==='pending');
+      if(firstDailyIdx>=0){
+        let d=pushWD(addD(l.calls.daily[firstDailyIdx].due,diff));
+        for(let i=firstDailyIdx;i<l.calls.daily.length;i++){
+          if(l.calls.daily[i].status==='pending'){
+            l.calls.daily[i].due=d;
+            d=nextWD(d);
+          }
+        }
+      }
+      l.calls.weekly.forEach(w=>{
+        if(w.status==='pending'){
+          w.dueStart=pushWD(addD(w.dueStart,diff));
+          w.dueEnd=addD(w.dueStart,4);
+        }
+      });
+      l.emails.forEach(e=>{if(e.status==='pending')e.due=pushWD(addD(e.due,diff));});
+      if(l.followupText&&l.followupText.status==='pending')l.followupText.due=pushWD(addD(l.followupText.due,diff));
+    }
+  }
   save();render();
 }
 
